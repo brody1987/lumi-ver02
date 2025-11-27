@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lumière Editorial - AI Fashion Studio</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+    
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              serif: ['"Playfair Display"', 'serif'],
+              sans: ['"Lato"', 'sans-serif'],
+            },
+            colors: {
+              brand: {
+                black: '#0a0a0a',
+                gold: '#d4af37',
+                cream: '#f5f5f0',
+                gray: '#888888'
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      body {
+        background-color: #0a0a0a;
+        color: #f5f5f0;
+      }
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar { width: 8px; }
+      ::-webkit-scrollbar-track { background: #0a0a0a; }
+      ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background: #d4af37; }
+      
+      .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+      .custom-scrollbar::-webkit-scrollbar-thumb { background: #444; }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #666; }
+    </style>
+
+    <!-- Babel for in-browser JSX compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Import Map: Explicitly use React 18 from esm.sh to avoid version conflicts -->
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom": "https://esm.sh/react-dom@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "react-router-dom": "https://esm.sh/react-router-dom@6.22.0?external=react,react-dom",
+        "@google/genai": "https://esm.sh/@google/genai"
+      }
+    }
+    </script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useCallback } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { BrowserRouter } from 'react-router-dom';
+        import { GoogleGenAI } from "@google/genai";
+
+        // ==========================================
+        // 1. CONSTANTS
+        // ==========================================
+        const FASHION_STYLES = [
+            {
+                id: "MINIMALIST",
+                label: "Minimalist Studio (미니멀리스트)",
+                description: "군더더기 없는 깔끔한 배경과 부드러운 조명을 사용하여, 제품과 인물의 본질에 집중하는 모던하고 세련된 스타일입니다.",
+                prompt: "Minimalist Studio, clean background, soft lighting"
+            },
+            {
+                id: "STREETWEAR",
+                label: "Urban Street (어반 스트릿)",
+                description: "도시의 거리, 자연스러운 빛, 그리고 캔디드한 순간을 포착하여 힙하고 자유분방한 에너지를 담아내는 스트릿 패션 스타일입니다.",
+                prompt: "Urban Street Style, city background, natural light, candid"
+            },
+            {
+                id: "AVANT_GARDE",
+                label: "Avant-Garde (아방가르드)",
+                description: "초현실적인 요소, 파격적인 구도, 그리고 드라마틱한 고대비 조명을 통해 예술적이고 실험적인 패션 화보를 연출합니다.",
+                prompt: "Avant-Garde, surreal elements, dramatic high-contrast lighting"
+            },
+            {
+                id: "VINTAGE",
+                label: "Vintage 90s (빈티지 90s)",
+                description: "필름 카메라 특유의 그레인, 플래시 조명, 레트로한 색감을 살려 90년대 패션 잡지의 향수를 불러일으키는 감성적인 스타일입니다.",
+                prompt: "Vintage 90s Editorial, film grain, flash photography"
+            },
+            {
+                id: "LUXURY",
+                label: "Luxury Glamour (럭셔리 글래머)",
+                description: "황금 시간대의 따스한 빛(Golden Hour)과 호화로운 배경을 매치하여, 우아하고 고급스러운 프리미엄 브랜드 이미지를 극대화합니다.",
+                prompt: "Luxury Glamour, golden hour, opulent setting"
+            },
+            {
+                id: "ETHEREAL",
+                label: "Ethereal Soft Focus (이더리얼 소프트 포커스)",
+                description: "꿈꾸는 듯한 몽환적이고 부드러운 분위기입니다. 뷰티 제품이나 여성 의류, 감성적인 브랜딩에 적합하며, 빛이 번지는 듯한 효과(Bloom)로 피사체를 신비롭게 만듭니다.",
+                prompt: "Soft dreamy lighting, ethereal glow, hazy atmosphere, bloom effect, pastel color palette, angelic vibe, soft focus, romantic mood, shot on 35mm lens"
+            },
+            {
+                id: "Y2K",
+                label: "Y2K Futurism (Y2K 퓨처리즘)",
+                description: "2000년대 초반의 사이버틱하고 힙한 감성입니다. 메탈릭한 질감, 네온 컬러, 광각 렌즈 왜곡 등을 사용하여 Z세대 타겟의 스포티하거나 힙한 브랜드에 매우 효과적입니다.",
+                prompt: "Y2K aesthetic, year 2000 futuristic style, metallic textures, chrome fluid shapes, neon accents, fish-eye lens effect, cool blue and silver tones, glossy finish, cyber fashion"
+            },
+            {
+                id: "GRUNGE",
+                label: "Industrial Grunge (인더스트리얼 그런지)",
+                description: "'Urban Street Style'보다 조금 더 거칠고 날것의 느낌입니다. 콘크리트, 녹슨 철, 어두운 톤을 배경으로 하여 제품의 내구성이나 남성적인 이미지를 강조할 때 좋습니다.",
+                prompt: "Raw industrial background, brutalist architecture, concrete textures, dim dramatic lighting, desaturated tones, moody atmosphere, sharp contrast, grunge texture, underground vibe"
+            },
+            {
+                id: "JAPANDI",
+                label: "Warm Japandi (웜 재팬디)",
+                description: "'Minimalist Studio'보다 더 따뜻하고 자연 친화적인 느낌입니다. 우드 톤, 베이지, 자연광을 활용하여 편안하고 고급스러운 라이프스타일을 보여주기에 최적입니다.",
+                prompt: "Japandi style, warm natural sunlight, sun-drenched, beige and earth tones, organic materials, wood and linen textures, cozy atmosphere, clean lines, serene and peaceful"
+            },
+            {
+                id: "NOIR",
+                label: "Cinematic Film Noir (시네마틱 필름 누아르)",
+                description: "영화의 한 장면처럼 극적인 그림자와 깊이감을 줍니다. 'Luxury Glamour'가 화려함이라면, 이 스타일은 무게감 있고 진중한 분위기로 프리미엄 이미지를 전달합니다.",
+                prompt: "Cinematic lighting, film noir style, dramatic shadows, chiaroscuro effect, moody and mysterious, depth of field, rich textures, cinematic color grading, 8k resolution, high contrast"
+            },
+            {
+                id: "DYNAMIC",
+                label: "Dynamic Performance (다이내믹 퍼포먼스)",
+                description: "단순히 제품을 보여주는 것을 넘어, 폭발적인 움직임과 에너지를 강조하는 스타일입니다. 강렬한 조명(림 라이트)을 사용하여 피사체의 윤곽을 살리고, 땀방울이나 근육의 질감, 휘날리는 옷자락 등을 통해 '고기능성(High-Performance)' 이미지를 극대화합니다.",
+                prompt: "Dynamic sports photography, high-performance athletic aesthetic, intense action shot, freezing motion, dramatic rim lighting, dark background with stadium floodlights, sweat texture on skin, technical sportswear fabrics, muscular definition, energetic atmosphere, commercial sports advertisement quality, high contrast, 8k resolution"
+            }
+        ];
+
+        const POSES = [
+            "Full body shot, walking towards the camera with a confident stride (Street Style motion).",
+            "Three-quarter shot, standing with hands in pockets or resting on hips, looking slightly away from camera.",
+            "Seated pose on a prop (chair or stairs), relaxed posture, highlighting the outfit drapery.",
+            "Close-up portrait focus (waist up), intense eye contact, highlighting textures.",
+            "Low angle hero shot, standing tall and empowering, looking down at the lens.",
+            "Dynamic movement shot, fabric flowing, caught mid-turn or mid-step.",
+            "Over-the-shoulder shot, looking back at the camera, showcasing back details or profile.",
+            "Leaning against a wall or surface, casual yet chic, one leg crossed over the other.",
+            "High angle artistic shot, looking up towards the camera.",
+            "Side profile silhouette, highlighting the structural shape of the outfit."
+        ];
+
+        // ==========================================
+        // 2. LOGIC & SERVICES
+        // ==========================================
+        
+        // Simple local storage for API Key
+        const getStoredKey = () => localStorage.getItem("gemini_api_key");
+        const setStoredKey = (key) => {
+            if (key) localStorage.setItem("gemini_api_key", key);
+            else localStorage.removeItem("gemini_api_key");
+        };
+
+        const generateFashionImage = async (apiKey, portraitBase64, productBase64s, stylePrompt, poseDescription) => {
+            // Explicitly pass API Key to the constructor
+            const ai = new GoogleGenAI({ apiKey: apiKey });
+            
+            const cleanPortrait = portraitBase64.includes(',') ? portraitBase64.split(',')[1] : portraitBase64;
+            const cleanProducts = productBase64s.map(p => p.includes(',') ? p.split(',')[1] : p);
+
+            const parts = [];
+            
+            // 1. Portrait
+            parts.push({ inlineData: { mimeType: "image/jpeg", data: cleanPortrait } });
+            
+            // 2. Products
+            cleanProducts.forEach(prod => {
+                parts.push({ inlineData: { mimeType: "image/jpeg", data: prod } });
+            });
+
+            // 3. Prompt
+            const prompt = `
+                You are a visionary fashion director.
+                
+                INPUTS:
+                1. **Model Reference** (First Image): Use strictly for FACE, HAIR, SKIN TONE, BODY PROPORTIONS. 
+                   - Maintain facial identity. 
+                   - IGNORE original clothes.
+                
+                2. **Product References** (Subsequent Images): MANDATORY HERO ITEMS. 
+                   - Preserve exact details, logos, cuts.
+
+                TASK:
+                Fit the 'Product References' onto the model. GENERATE a totally new outfit for the rest (pants, shoes, accessories) that matches the aesthetic.
+                
+                ART DIRECTION:
+                - Pose: ${poseDescription}
+                - Aesthetic: ${stylePrompt}
+                - Quality: Photorealistic, 4k, editorial lighting.
+            `;
+            parts.push({ text: prompt });
+
+            try {
+                const response = await ai.models.generateContent({
+                    model: 'gemini-3-pro-image-preview',
+                    contents: { parts: parts },
+                    config: {
+                        imageConfig: { aspectRatio: "3:4", imageSize: "4K" }
+                    }
+                });
+
+                for (const part of response.candidates?.[0]?.content?.parts || []) {
+                    if (part.inlineData) {
+                        return `data:image/png;base64,${part.inlineData.data}`;
+                    }
+                }
+                throw new Error("No image generated.");
+            } catch (error) {
+                console.error("Gemini Generation Error:", error);
+                throw error;
+            }
+        };
+
+        // ==========================================
+        // 3. COMPONENTS
+        // ==========================================
+        
+        const ImageUploader = ({ label, subLabel, images, onImagesChange, multiple = false, maxFiles = 1 }) => {
+            const handleFileChange = async (e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                    const newFiles = Array.from(e.target.files);
+                    const processedFiles = await Promise.all(newFiles.map(async (file) => {
+                        return new Promise((resolve) => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                                resolve({
+                                    id: Math.random().toString(36).substr(2, 9),
+                                    file,
+                                    previewUrl: URL.createObjectURL(file),
+                                    base64: reader.result
+                                });
+                            };
+                            reader.readAsDataURL(file);
+                        });
+                    }));
+
+                    if (multiple) {
+                        const combined = [...images, ...processedFiles];
+                        onImagesChange(combined.slice(0, maxFiles));
+                    } else {
+                        onImagesChange([processedFiles[0]]);
+                    }
+                }
+            };
+
+            const removeImage = (id) => {
+                onImagesChange(images.filter(img => img.id !== id));
+            };
+
+            return (
+                <div className="flex flex-col gap-4 w-full">
+                    <div className="flex justify-between items-baseline">
+                        <label className="text-brand-cream font-serif text-xl">{label}</label>
+                        {subLabel && <span className="text-brand-gray text-sm font-sans">{subLabel}</span>}
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {images.map((img) => (
+                            <div key={img.id} className="relative group aspect-[3/4] bg-neutral-900 border border-neutral-800">
+                                <img src={img.previewUrl} alt="Preview" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                                <button onClick={() => removeImage(img.id)} className="absolute top-1 right-1 bg-black/50 hover:bg-red-900 text-white rounded-full p-1 w-6 h-6 flex items-center justify-center text-xs transition-colors">×</button>
+                            </div>
+                        ))}
+
+                        {(multiple ? images.length < (maxFiles || 5) : images.length === 0) && (
+                            <label className="flex flex-col items-center justify-center aspect-[3/4] border border-dashed border-neutral-700 hover:border-brand-gold transition-colors cursor-pointer bg-neutral-900/50 hover:bg-neutral-800">
+                                <input type="file" className="hidden" accept="image/*" multiple={multiple} onChange={handleFileChange} />
+                                <span className="text-4xl text-neutral-600 mb-2">+</span>
+                                <span className="text-xs text-neutral-500 font-sans uppercase tracking-widest">Upload</span>
+                            </label>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // 4. MAIN APP
+        // ==========================================
+
+        function App() {
+            // State
+            const [apiKey, setApiKeyState] = useState(getStoredKey() || "");
+            const [showKeyModal, setShowKeyModal] = useState(!getStoredKey());
+            
+            const [portrait, setPortrait] = useState([]);
+            const [products, setProducts] = useState([]);
+            const [selectedStyle, setSelectedStyle] = useState(FASHION_STYLES[0]);
+            
+            const [generatedImages, setGeneratedImages] = useState([]);
+            const [isGenerating, setIsGenerating] = useState(false);
+            const [progress, setProgress] = useState(0);
+            const [error, setError] = useState(null);
+            
+            const [selectedImage, setSelectedImage] = useState(null);
+
+            const handleSaveKey = (val) => {
+                if(!val.trim()) return;
+                setStoredKey(val);
+                setApiKeyState(val);
+                setShowKeyModal(false);
+                setError(null);
+            };
+
+            const handleGenerate = async () => {
+                if (!apiKey) {
+                    setShowKeyModal(true);
+                    return;
+                }
+                if (portrait.length === 0 || products.length === 0) return;
+
+                setIsGenerating(true);
+                setProgress(0);
+                setGeneratedImages([]);
+                setError(null);
+
+                const total = POSES.length;
+                try {
+                    for (let i = 0; i < total; i++) {
+                        try {
+                            const pose = POSES[i];
+                            // Use selectedStyle.prompt here
+                            const base64 = await generateFashionImage(apiKey, portrait[0].base64, products.map(p => p.base64), selectedStyle.prompt, pose);
+                            
+                            const newImage = {
+                                id: Date.now() + i,
+                                url: base64,
+                                prompt: `${selectedStyle.prompt} | ${pose}`
+                            };
+                            
+                            setGeneratedImages(prev => [...prev, newImage]);
+                            setProgress(((i + 1) / total) * 100);
+                        } catch (err) {
+                            console.error(err);
+                            const msg = err.message || "";
+                            if (msg.includes("403") || msg.toLowerCase().includes("key") || msg.includes("400")) {
+                                throw new Error("Invalid API Key");
+                            }
+                        }
+                    }
+                } catch (err) {
+                    const msg = err.message || "Something went wrong.";
+                    if (msg.includes("Invalid API Key")) {
+                        setError("Your API Key is invalid or expired. Please check your billing or key.");
+                        setStoredKey(""); 
+                        setApiKeyState("");
+                        setShowKeyModal(true);
+                    } else {
+                        setError(msg);
+                    }
+                } finally {
+                    setIsGenerating(false);
+                }
+            };
+
+            const downloadImage = (url, id) => {
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `lumiere-${id}.png`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            // Calculate current basename dynamically for GitHub Pages
+            const basename = window.location.hostname.includes('github.io') 
+                ? window.location.pathname.replace(/\/$/, "") 
+                : "";
+
+            return (
+                <div className="min-h-screen bg-brand-black text-brand-cream font-sans selection:bg-brand-gold selection:text-black">
+                    
+                    {/* API Key Modal */}
+                    {showKeyModal && (
+                        <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4">
+                            <div className="bg-neutral-900 border border-neutral-800 p-8 max-w-md w-full rounded-sm shadow-2xl relative">
+                                <h2 className="font-serif text-3xl mb-2 text-brand-gold">Access Required</h2>
+                                <p className="text-neutral-400 text-sm mb-6 font-sans">
+                                    To access the Gemini 3 Pro Vision model, please provide your Google API Key.
+                                </p>
+                                
+                                {error && (
+                                    <div className="mb-4 p-3 bg-red-900/20 border border-red-500/50 text-red-400 text-xs font-bold flex flex-col gap-1">
+                                        <span>⚠️ Access Denied</span>
+                                        <span className="font-normal opacity-80">{error}</span>
+                                    </div>
+                                )}
+
+                                <input 
+                                    type="password" 
+                                    placeholder="Paste API Key here..."
+                                    className="w-full bg-black border border-neutral-700 p-4 text-white focus:border-brand-gold outline-none mb-4 font-mono text-sm"
+                                    onKeyDown={(e) => e.key === 'Enter' && handleSaveKey(e.currentTarget.value)}
+                                />
+                                <button 
+                                    onClick={(e) => handleSaveKey(e.currentTarget.previousSibling.value)}
+                                    className="w-full bg-brand-gold text-black font-bold py-4 uppercase tracking-widest hover:bg-white transition-colors"
+                                >
+                                    Enter Studio
+                                </button>
+                                <div className="mt-4 text-center">
+                                    <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-xs text-neutral-600 hover:text-brand-gold underline">
+                                        Get a Gemini API Key
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Header */}
+                    <header className="border-b border-white/10 p-6 sticky top-0 z-40 bg-brand-black/90 backdrop-blur-md flex justify-between items-center">
+                        <h1 className="font-serif text-2xl md:text-3xl tracking-tight text-brand-cream">Lumière Editorial</h1>
+                        
+                        <div className="flex items-center gap-6">
+                            {isGenerating && (
+                                <div className="flex items-center gap-3">
+                                    <div className="w-24 md:w-32 h-1 bg-neutral-800 rounded-full overflow-hidden">
+                                        <div className="h-full bg-brand-gold transition-all duration-500" style={{ width: `${progress}%` }}></div>
+                                    </div>
+                                    <span className="font-sans text-xs tracking-widest text-brand-gold">{Math.round(progress)}%</span>
+                                </div>
+                            )}
+                            <button 
+                                onClick={() => {
+                                    setShowKeyModal(true);
+                                    setError(null);
+                                }}
+                                className="text-xs font-sans tracking-widest text-neutral-500 hover:text-brand-cream uppercase border-b border-transparent hover:border-brand-cream transition-all pb-0.5"
+                            >
+                                API Key
+                            </button>
+                        </div>
+                    </header>
+
+                    <main className="max-w-7xl mx-auto p-6 md:p-12 space-y-16">
+                        {/* Control Panel */}
+                        <section className={`transition-opacity duration-700 ${isGenerating ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+                                {/* Left: Uploads */}
+                                <div className="lg:col-span-7 space-y-12">
+                                    <ImageUploader 
+                                        label="01. The Model" 
+                                        subLabel="Portrait photo (Face/Identity)"
+                                        images={portrait} 
+                                        onImagesChange={setPortrait} 
+                                        maxFiles={1} 
+                                    />
+                                    <ImageUploader 
+                                        label="02. The Collection" 
+                                        subLabel="Hero Products (Max 3)" 
+                                        images={products} 
+                                        onImagesChange={setProducts} 
+                                        multiple 
+                                        maxFiles={3} 
+                                    />
+                                </div>
+
+                                {/* Right: Controls */}
+                                <div className="lg:col-span-5 flex flex-col justify-end space-y-8">
+                                    <div className="space-y-4">
+                                        <label className="text-brand-cream font-serif text-xl block">03. Aesthetic</label>
+                                        <div className="flex flex-col gap-2 h-72 overflow-y-auto pr-2 custom-scrollbar">
+                                            {FASHION_STYLES.map((style) => (
+                                                <button 
+                                                    key={style.id} 
+                                                    onClick={() => setSelectedStyle(style)}
+                                                    className={`text-left px-5 py-3 border font-sans text-sm tracking-wide transition-all ${
+                                                        selectedStyle.id === style.id 
+                                                        ? 'border-brand-gold text-brand-gold bg-brand-gold/5' 
+                                                        : 'border-neutral-800 text-neutral-400 hover:border-neutral-600'
+                                                    }`}
+                                                >
+                                                    {style.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        {/* Description Box */}
+                                        <div className="mt-2 p-4 bg-neutral-900/50 border border-neutral-800 text-neutral-400 text-xs font-sans leading-relaxed min-h-[60px]">
+                                            <strong className="block text-brand-gold mb-1 font-serif italic">Style Detail</strong>
+                                            {selectedStyle.description}
+                                        </div>
+                                    </div>
+
+                                    <button 
+                                        onClick={handleGenerate}
+                                        disabled={portrait.length === 0 || products.length === 0 || isGenerating}
+                                        className="w-full py-6 bg-brand-cream text-brand-black font-serif text-xl italic hover:bg-brand-gold disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        {isGenerating ? 'Synthesizing Issue...' : 'Generate 10 Variations'}
+                                    </button>
+                                    
+                                    {error && !showKeyModal && (
+                                        <p className="text-red-500 font-sans text-xs tracking-wide border-l-2 border-red-500 pl-3">
+                                            {error}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Results */}
+                        {(generatedImages.length > 0 || isGenerating) && (
+                            <section className="space-y-8 pt-12 border-t border-white/10">
+                                <div className="flex items-baseline justify-between">
+                                    <h2 className="font-serif text-4xl">The Issue</h2>
+                                    <span className="font-sans text-sm text-brand-gray tracking-widest">VOL. 01 / {generatedImages.length} SHOTS</span>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-1">
+                                    {generatedImages.map((img, idx) => (
+                                        <div 
+                                            key={img.id} 
+                                            onClick={() => setSelectedImage(img)}
+                                            className="group relative aspect-[3/4] overflow-hidden bg-neutral-900 cursor-zoom-in"
+                                        >
+                                            <img 
+                                                src={img.url} 
+                                                alt={`Editorial ${idx}`} 
+                                                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                                            />
+                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300"></div>
+                                            <div className="absolute bottom-4 left-4 pointer-events-none mix-blend-difference opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+                                                <p className="text-white font-serif italic text-2xl">Lumière</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    
+                                    {isGenerating && Array.from({ length: Math.max(0, POSES.length - generatedImages.length) }).map((_, i) => (
+                                        <div key={`skel-${i}`} className="aspect-[3/4] bg-neutral-900 border border-neutral-800 flex flex-col items-center justify-center animate-pulse gap-4">
+                                            <div className="w-8 h-8 border-2 border-brand-gold border-t-transparent rounded-full animate-spin"></div>
+                                            <span className="font-serif text-neutral-600 text-xl italic">Developing...</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+                        )}
+                    </main>
+
+                    {/* Lightbox */}
+                    {selectedImage && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/98 backdrop-blur-md animate-in fade-in duration-200 p-4">
+                            <button 
+                                onClick={() => setSelectedImage(null)}
+                                className="absolute top-6 right-6 text-white/50 hover:text-white transition-colors z-[110]"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            </button>
+                            
+                            <div className="relative flex flex-col items-center max-w-full max-h-full">
+                                <img 
+                                    src={selectedImage.url} 
+                                    alt="Full Size" 
+                                    className="max-h-[85vh] max-w-full object-contain shadow-[0_0_50px_rgba(0,0,0,0.5)]"
+                                />
+                                <button 
+                                    onClick={() => downloadImage(selectedImage.url, selectedImage.id)}
+                                    className="mt-6 px-10 py-3 bg-white text-black font-sans font-bold uppercase tracking-widest hover:bg-brand-gold hover:text-white transition-colors text-sm"
+                                >
+                                    Download High-Res
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = createRoot(document.getElementById('root'));
+        
+        // Calculate dynamic basename for GitHub Pages support
+        const basename = window.location.hostname.includes('github.io') 
+            ? window.location.pathname.replace(/\/$/, "") 
+            : "";
+
+        root.render(
+          <BrowserRouter basename={basename}>
+            <App />
+          </BrowserRouter>
+        );
+
+    </script>
+</body>
+</html>
